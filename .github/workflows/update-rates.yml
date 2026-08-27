@@ -1,0 +1,35 @@
+name: Update FX Rates
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'   # every 6 hours
+  workflow_dispatch:         # lets you trigger it manually from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  update-rates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch latest USD/EUR rates
+        env:
+          NERKH_API_KEY: ${{ secrets.NERKH_API_KEY }}
+        run: |
+          curl -s "https://api.nerkh.io/v1/prices/json/currency?x-api-key=$NERKH_API_KEY" -o response.json
+          USD=$(jq -r '.data.prices.USD.current' response.json)
+          EUR=$(jq -r '.data.prices.EUR.current' response.json)
+          DATE=$(date -u +%Y-%m-%d)
+          echo "{\"usd\": $USD, \"eur\": $EUR, \"date\": \"$DATE\"}" > rates.json
+          cat rates.json
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add rates.json
+          git diff --staged --quiet || git commit -m "Update FX rates"
+          git push
