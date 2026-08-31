@@ -19,9 +19,23 @@ jobs:
         env:
           NERKH_API_KEY: ${{ secrets.NERKH_API_KEY }}
         run: |
-          curl -s "https://api.nerkh.io/v1/prices/json/currency?x-api-key=$NERKH_API_KEY" -o response.json
-          USD=$(jq -r '.data.prices.USD.current' response.json)
-          EUR=$(jq -r '.data.prices.EUR.current' response.json)
+          HTTP_CODE=$(curl -sS -w "%{http_code}" -o response.json "https://api.nerkh.io/v1/prices/json/currency?x-api-key=$NERKH_API_KEY")
+          echo "HTTP status code: $HTTP_CODE"
+          echo "----- raw response body -----"
+          cat response.json
+          echo ""
+          echo "------------------------------"
+
+          USD=$(jq -r '.data.prices.USD.current // empty' response.json)
+          EUR=$(jq -r '.data.prices.EUR.current // empty' response.json)
+          echo "Parsed USD: '$USD'"
+          echo "Parsed EUR: '$EUR'"
+
+          if [ -z "$USD" ] || [ -z "$EUR" ]; then
+            echo "::error::Could not parse USD/EUR from the response — see raw body above. Keeping the previous rates.json untouched."
+            exit 1
+          fi
+
           DATE=$(date -u +%Y-%m-%d)
           echo "{\"usd\": $USD, \"eur\": $EUR, \"date\": \"$DATE\"}" > rates.json
           cat rates.json
